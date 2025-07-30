@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>David Allen Productions – Delivery Tracking</title>
+    <!-- TailwindCSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body class="bg-gray-100 min-h-screen flex flex-col">
+    <header class="bg-red-600 text-white p-4">
+      <h1 class="text-2xl font-bold">Delivery Tracking</h1>
+      <p class="text-sm">Real‑time view of recent jobs (today & yesterday)</p>
+    </header>
+    <main class="flex-1 p-4 overflow-auto">
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <!-- Jobs table -->
+        <div class="col-span-2 bg-white rounded shadow p-4 overflow-auto">
+          <h2 class="text-xl font-semibold mb-4">Jobs</h2>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200" id="jobsTable">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-3 py-2 text-left text-sm font-medium text-gray-700">Address</th>
+                  <th class="px-3 py-2 text-left text-sm font-medium text-gray-700">Photographer</th>
+                  <th class="px-3 py-2 text-left text-sm font-medium text-gray-700">Client</th>
+                  <th class="px-3 py-2 text-left text-sm font-medium text-gray-700">Appt Date</th>
+                  <th class="px-3 py-2 text-left text-sm font-medium text-gray-700">Status</th>
+                  <th class="px-3 py-2 text-left text-sm font-medium text-gray-700">Delivered</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100" id="jobsBody">
+                <!-- Rows populated by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Summary chart -->
+        <div class="bg-white rounded shadow p-4">
+          <h2 class="text-xl font-semibold mb-4">Status Breakdown</h2>
+          <canvas id="statusChart" width="400" height="400"></canvas>
+        </div>
+      </div>
+    </main>
+    <script>
+      // Fetch jobs from backend and update DOM
+      async function fetchJobs() {
+        try {
+          const res = await fetch('/jobs');
+          const jobs = await res.json();
+          renderTable(jobs);
+          renderChart(jobs);
+        } catch (err) {
+          console.error('Failed to fetch jobs:', err);
+        }
+      }
+
+      // Render jobs into the table body
+      function renderTable(jobs) {
+        const body = document.getElementById('jobsBody');
+        body.innerHTML = '';
+        if (!Array.isArray(jobs) || !jobs.length) {
+          const row = document.createElement('tr');
+          const cell = document.createElement('td');
+          cell.colSpan = 6;
+          cell.className = 'text-center py-4 text-gray-500';
+          cell.textContent = 'No jobs found in the last two days.';
+          row.appendChild(cell);
+          body.appendChild(row);
+          return;
+        }
+        jobs.forEach(job => {
+          const row = document.createElement('tr');
+          row.className = 'hover:bg-gray-50';
+          const fields = [
+            job.address || '—',
+            job.photographer || '—',
+            job.clientName || '—',
+            job.apptDate ? new Date(job.apptDate).toLocaleString() : '—',
+            job.status,
+            job.deliveryDate ? new Date(job.deliveryDate).toLocaleString() : '—'
+          ];
+          fields.forEach((val, idx) => {
+            const td = document.createElement('td');
+            td.className = 'px-3 py-2 text-sm whitespace-nowrap';
+            // Apply color coding on status column
+            if (idx === 4) {
+              td.className += ' font-semibold ';
+              td.className += val === 'Delivered' ? 'text-green-600' : 'text-orange-600';
+            }
+              
+            td.textContent = val;
+            row.appendChild(td);
+          });
+          body.appendChild(row);
+        });
+      }
+
+      // Chart instance variable
+      let statusChart;
+
+      function renderChart(jobs) {
+        const delivered = jobs.filter(j => j.status === 'Delivered').length;
+        const pending = jobs.filter(j => j.status !== 'Delivered').length;
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        const data = {
+          labels: ['Delivered', 'Pending'],
+          datasets: [{
+            data: [delivered, pending],
+            backgroundColor: ['#16a34a', '#f97316'],
+          }]
+        };
+        const options = {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        };
+        if (statusChart) {
+          statusChart.data = data;
+          statusChart.update();
+        } else {
+          statusChart = new Chart(ctx, { type: 'doughnut', data, options });
+        }
+      }
+
+      // Initial load
+      fetchJobs();
+      // Refresh every minute
+      setInterval(fetchJobs, 60 * 1000);
+    </script>
+  </body>
+</html>
